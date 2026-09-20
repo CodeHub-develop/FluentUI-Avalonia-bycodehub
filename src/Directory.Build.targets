@@ -1,0 +1,28 @@
+<Project>
+
+  <!--
+    CodeHub fork 的打包标识覆盖层。
+
+    放在 Directory.Build.targets（而非 .props）的原因：MSBuild 在项目文件之后导入 targets，
+    因此这里的赋值能覆盖 src/Directory.Build.props 与各 csproj 里的同名属性
+    —— 这样本 fork 无需修改上游任何既有文件即可换包名（降低合并上游的成本）。
+
+    刻意保留不动的（重要）：
+      AssemblyName  = FluentAvalonia      → 库里上百处 XAML 的 assembly=FluentAvalonia 引用不受影响
+      AssemblyVersion = 3.1.0.0           → 程序集身份不变，二进制兼容
+    只换「对外分发标识」，让本包与官方 FluentAvaloniaUI 同名同版本的冲突消失。
+  -->
+  <PropertyGroup>
+    <PackageId>CodeHub-FluentUI</PackageId>
+    <Version>3.1.0-codehub.1</Version>
+    <Authors>CodeHub-develop</Authors>
+    <Company>CodeHub-develop</Company>
+    <Product>CodeHub FluentUI</Product>
+    <RepositoryUrl>https://github.com/CodeHub-develop/FluentUI-Avalonia-bycodehub</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Description>FluentAvalonia 的 CodeHub 分支：Fluent design 控件库，并在上游基础上补充 CodeHub 应用群所需的控件（如 FASkeleton）。</Description>
+    <PackageTags>c-sharp;xaml;cross-platform;dotnet;avalonia;avaloniaui;fluent;fluent-design;codehub</PackageTags>
+    <PackageProjectUrl>https://github.com/CodeHub-develop/FluentUI-Avalonia-bycodehub</PackageProjectUrl>
+  </PropertyGroup>
+
+</Project>
