@@ -1,0 +1,72 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ui="clr-namespace:FluentAvalonia.UI.Controls;assembly=FluentAvalonia">
+
+    <Design.PreviewWith>
+        <Border Padding="40">
+            <StackPanel Spacing="12">
+                <ui:FASkeleton Height="20" Width="160" CornerRadius="8" IsActive="True" IsLoading="True" />
+                <ui:FASkeleton Height="15" Width="240" CornerRadius="4" IsActive="True" IsLoading="True" />
+                <ui:FASkeleton Height="15" Width="120" CornerRadius="4" IsActive="False" IsLoading="True" />
+            </StackPanel>
+        </Border>
+    </Design.PreviewWith>
+
+    <ResourceDictionary.ThemeDictionaries>
+        <!-- 骨架色沿用 Tio 时代的取值，保证视觉连续 -->
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="SkeletonFillColor" Color="#E6E8EA" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="SkeletonFillColor" Color="#2E3238" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="SkeletonFillColor" Color="#E6E8EA" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <ControlTheme x:Key="{x:Type ui:FASkeleton}" TargetType="ui:FASkeleton">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Template">
+            <ControlTemplate TargetType="ui:FASkeleton">
+                <Border Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        ClipToBounds="True"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                    <Panel>
+                        <ContentPresenter x:Name="PART_ContentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        <!-- 骨架遮罩：IsLoading 时显示，IsActive 时叠加脉冲 -->
+                        <Border x:Name="PART_LoadingBorder"
+                                Background="{DynamicResource SkeletonFillColor}"
+                                Classes.Active="{Binding IsActive, RelativeSource={RelativeSource TemplatedParent}}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                IsHitTestVisible="{TemplateBinding IsLoading}"
+                                IsVisible="{TemplateBinding IsLoading}" />
+                    </Panel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+
+        <Style Selector="^ /template/ Border#PART_LoadingBorder.Active">
+            <Style.Animations>
+                <Animation Duration="0:0:1.0"
+                           Easing="SineEaseInOut"
+                           IterationCount="INFINITE"
+                           PlaybackDirection="Alternate">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="Opacity" Value="0.45" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="Opacity" Value="1" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+    </ControlTheme>
+
+</ResourceDictionary>
