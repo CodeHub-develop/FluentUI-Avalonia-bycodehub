@@ -84,6 +84,7 @@
 
                 <!-- CodeHub 新增控件（只新增文件，不改上游既有文件，降低合并上游的成本） -->
                 <MergeResourceInclude Source="/Styling/ControlThemes/FAControls/SkeletonStyles.axaml" />
+                <MergeResourceInclude Source="/Styling/ControlThemes/FAControls/AcrylicStyles.axaml" />
 
                 <MergeResourceInclude Source="/Styling/ControlThemes/FAControls/FAMenuFlyout/FAMenuFlyoutPresenter.axaml" />
                 <MergeResourceInclude Source="/Styling/ControlThemes/FAControls/FAMenuFlyout/MenuFlyoutItemStyles.axaml" />
