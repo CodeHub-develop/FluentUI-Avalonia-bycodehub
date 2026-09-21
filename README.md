@@ -2,6 +2,8 @@
 
 你应该知道readme是很痛苦的...所以我不写了...
 You know how painful writing a README is... so I'm not doing it...
+总之，这是一个基于FluentUI-Avaloina的储存库,但加了点东西(组件).
+In short, this is a repository based on FluentUI-Avalonia, but with a few additions (components).
 
 ## Licence: MIT License
 
