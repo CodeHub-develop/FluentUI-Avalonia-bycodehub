@@ -1,0 +1,75 @@
+name: publish/package
+
+# 把基座库打包并发布到 GitHub Packages（nuget.pkg.github.com/CodeHub-develop），
+# 供 MChub 等消费方在 CI 中还原。
+#
+# 用法：
+#   · 手动触发（workflow_dispatch），或
+#   · 推一个 pkg-v* 标签（例如 pkg-v3.1.0-codehub.1）
+#
+# ⚠️ 发新版必须同时把 src/Directory.Build.targets 里的 <Version> 递增，
+#    否则 GitHub Packages 会因为「该版本已存在」拒绝（配合 --skip-duplicate 会静默跳过，
+#    导致消费方拿到的还是旧包）。
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "pkg-v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: 读取包标识
+        id: meta
+        run: |
+          set -euo pipefail
+          PID=$(grep -oP '(?<=<PackageId>)[^<]+' src/Directory.Build.targets)
+          VER=$(grep -oP '(?<=<Version>)[^<]+' src/Directory.Build.targets)
+          echo "package_id=${PID}" >> "$GITHUB_OUTPUT"
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "将发布：${PID} ${VER}"
+
+      - name: Pack
+        run: |
+          dotnet pack src/FluentAvalonia/FluentAvalonia.csproj \
+            -c Release \
+            -o ./artifacts \
+            -p:ContinuousIntegrationBuild=true
+
+      - name: 校验产物
+        run: |
+          set -euo pipefail
+          ls -lh ./artifacts
+          test -f "./artifacts/${{ steps.meta.outputs.package_id }}.${{ steps.meta.outputs.version }}.nupkg" \
+            || { echo "::error::没找到预期的 nupkg"; exit 1; }
+
+      - name: 发布到 GitHub Packages
+        run: |
+          dotnet nuget push "./artifacts/*.nupkg" \
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --api-key "${{ secrets.GITHUB_TOKEN }}" \
+            --skip-duplicate
+
+      - name: 汇总
+        run: |
+          {
+            echo "### 已发布到 GitHub Packages"
+            echo ""
+            echo "- 包：\`${{ steps.meta.outputs.package_id }}\`"
+            echo "- 版本：\`${{ steps.meta.outputs.version }}\`"
+            echo "- 源：\`https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json\`"
+          } >> "$GITHUB_STEP_SUMMARY"
