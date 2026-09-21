@@ -43,10 +43,20 @@ jobs:
           echo "version=${VER}" >> "$GITHUB_OUTPUT"
           echo "将发布：${PID} ${VER}"
 
+      # 必须先显式构建再 pack：这个仓库里 `dotnet pack` 不会触发构建，
+      # 直接 pack 会报 NU5026（待打包的 FluentAvalonia.dll 不存在）。本地同样如此，
+      # 因此本地打包的正确姿势也是 `build -c Release` + `pack --no-build`。
+      - name: Build
+        run: |
+          dotnet build src/FluentAvalonia/FluentAvalonia.csproj \
+            -c Release \
+            -p:ContinuousIntegrationBuild=true
+
       - name: Pack
         run: |
           dotnet pack src/FluentAvalonia/FluentAvalonia.csproj \
             -c Release \
+            --no-build \
             -o ./artifacts \
             -p:ContinuousIntegrationBuild=true
 
