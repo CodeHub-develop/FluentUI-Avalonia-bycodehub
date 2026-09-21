@@ -1,15 +1,17 @@
 name: publish/package
 
-# 把基座库打包并发布到 GitHub Packages（nuget.pkg.github.com/CodeHub-develop），
-# 供 MChub 等消费方在 CI 中还原。
+# 把基座库打包并双发到：
+#   1. nuget.org（主，公开可匿名拉取）—— 需在仓库配 NUGET_API_KEY secret；
+#      未配置时自动跳过，仅推 GitHub Packages。
+#   2. GitHub Packages（nuget.pkg.github.com/CodeHub-develop，备选）。
 #
 # 用法：
 #   · 手动触发（workflow_dispatch），或
 #   · 推一个 pkg-v* 标签（例如 pkg-v3.1.0-codehub.1）
 #
 # ⚠️ 发新版必须同时把 src/Directory.Build.targets 里的 <Version> 递增，
-#    否则 GitHub Packages 会因为「该版本已存在」拒绝（配合 --skip-duplicate 会静默跳过，
-#    导致消费方拿到的还是旧包）。
+#    否则 nuget.org 会因为「该版本已存在」拒绝（--skip-duplicate 会静默跳过，
+#    导致消费方拿到的还是旧包）。GitHub Packages 同理。
 
 on:
   workflow_dispatch:
@@ -67,6 +69,17 @@ jobs:
           test -f "./artifacts/${{ steps.meta.outputs.package_id }}.${{ steps.meta.outputs.version }}.nupkg" \
             || { echo "::error::没找到预期的 nupkg"; exit 1; }
 
+      - name: 发布到 nuget.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        # 未配置 NUGET_API_KEY 时跳过 nuget.org（仍会推 GitHub Packages）
+        if: ${{ env.NUGET_API_KEY != '' }}
+        run: |
+          dotnet nuget push "./artifacts/*.nupkg" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --skip-duplicate
+
       - name: 发布到 GitHub Packages
         run: |
           dotnet nuget push "./artifacts/*.nupkg" \
@@ -77,9 +90,10 @@ jobs:
       - name: 汇总
         run: |
           {
-            echo "### 已发布到 GitHub Packages"
+            echo "### 已发布"
             echo ""
             echo "- 包：\`${{ steps.meta.outputs.package_id }}\`"
             echo "- 版本：\`${{ steps.meta.outputs.version }}\`"
-            echo "- 源：\`https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json\`"
+            echo "- nuget.org：\`https://www.nuget.org/packages/${{ steps.meta.outputs.package_id }}\`"
+            echo "- GitHub Packages：\`https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json\`"
           } >> "$GITHUB_STEP_SUMMARY"
