@@ -1,17 +1,21 @@
 name: publish/package
 
-# 把基座库打包并双发到：
-#   1. nuget.org（主，公开可匿名拉取）—— 需在仓库配 NUGET_API_KEY secret；
-#      未配置时自动跳过，仅推 GitHub Packages。
-#   2. GitHub Packages（nuget.pkg.github.com/CodeHub-develop，备选）。
+# 把基座库打包并发布到两个源：
+#   1. nuget.org（主，公开可匿名拉取）—— 走 **Trusted Publishing（OIDC 受信任发布）**，
+#      不需要任何长期 API key。GitHub Actions 用 OIDC 令牌向 nuget.org 换一个
+#      一次性临时 key（约 1 小时有效）来推送。
+#   2. GitHub Packages（nuget.pkg.github.com/CodeHub-develop，备选，MChub 目前在用）。
 #
 # 用法：
 #   · 手动触发（workflow_dispatch），或
 #   · 推一个 pkg-v* 标签（例如 pkg-v3.1.0-codehub.1）
 #
 # ⚠️ 发新版必须同时把 src/Directory.Build.targets 里的 <Version> 递增，
-#    否则 nuget.org 会因为「该版本已存在」拒绝（--skip-duplicate 会静默跳过，
-#    导致消费方拿到的还是旧包）。GitHub Packages 同理。
+#    否则 nuget.org / GitHub Packages 都会因「该版本已存在」拒绝
+#    （--skip-duplicate 会静默跳过，导致消费方拿到旧包）。
+#
+# 首次启用 Trusted Publishing 需在 nuget.org 网页建 policy（见仓库 CONTRIBUTING / 下方说明），
+# 并在本仓库 Settings → Secrets 建一个 NUGET_USER（你的 nuget.org 用户名，profile name 非邮箱）。
 
 on:
   workflow_dispatch:
@@ -21,11 +25,15 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   pack:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      package_id: ${{ steps.meta.outputs.package_id }}
+      version: ${{ steps.meta.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,16 +77,63 @@ jobs:
           test -f "./artifacts/${{ steps.meta.outputs.package_id }}.${{ steps.meta.outputs.version }}.nupkg" \
             || { echo "::error::没找到预期的 nupkg"; exit 1; }
 
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./artifacts/*.nupkg
+
+  publish-nuget:
+    needs: pack
+    runs-on: ubuntu-latest
+    # id-token: write 是 Trusted Publishing 的硬性前提：允许本 job 向 GitHub 申请 OIDC 令牌。
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: 下载产物
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./artifacts
+
+      - name: NuGet 登录（OIDC → 一次性临时 API key，受信任发布）
+        uses: NuGet/login@v1
+        id: nuget_login
+        with:
+          # nuget.org 用户名（profile name，不是邮箱）。建议放在 secret。
+          # 必须与 nuget.org 上 Trusted Publishing policy 的 Package Owner 一致。
+          user: ${{ secrets.NUGET_USER }}
+
       - name: 发布到 nuget.org
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        # 未配置 NUGET_API_KEY 时跳过 nuget.org（仍会推 GitHub Packages）
-        if: ${{ env.NUGET_API_KEY != '' }}
         run: |
           dotnet nuget push "./artifacts/*.nupkg" \
             --source "https://api.nuget.org/v3/index.json" \
-            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --api-key "${{ steps.nuget_login.outputs.NUGET_API_KEY }}" \
             --skip-duplicate
+
+  publish-ghp:
+    needs: pack
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: 下载产物
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./artifacts
 
       - name: 发布到 GitHub Packages
         run: |
@@ -87,13 +142,20 @@ jobs:
             --api-key "${{ secrets.GITHUB_TOKEN }}" \
             --skip-duplicate
 
+  summary:
+    needs: [pack, publish-nuget, publish-ghp]
+    runs-on: ubuntu-latest
+    if: always()
+    permissions:
+      contents: read
+    steps:
       - name: 汇总
         run: |
           {
             echo "### 已发布"
             echo ""
-            echo "- 包：\`${{ steps.meta.outputs.package_id }}\`"
-            echo "- 版本：\`${{ steps.meta.outputs.version }}\`"
-            echo "- nuget.org：\`https://www.nuget.org/packages/${{ steps.meta.outputs.package_id }}\`"
+            echo "- 包：\`${{ needs.pack.outputs.package_id }}\`"
+            echo "- 版本：\`${{ needs.pack.outputs.version }}\`"
+            echo "- nuget.org：\`https://www.nuget.org/packages/${{ needs.pack.outputs.package_id }}\`"
             echo "- GitHub Packages：\`https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json\`"
           } >> "$GITHUB_STEP_SUMMARY"
